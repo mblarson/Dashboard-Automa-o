@@ -1,0 +1,7 @@
+{
+  "name": "Dashboard - Mathews e Débora",
+  "description": "A next-generation smart home dashboard powered by Gemini Live API, simulating a voice-controlled home automation hub.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
