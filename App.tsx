@@ -9,7 +9,9 @@ import {
   Bell,
   Search,
   Thermometer,
-  WifiOff
+  WifiOff,
+  AlertTriangle,
+  Database
 } from 'lucide-react';
 import DeviceCard from './components/DeviceCard';
 import EnergyChart from './components/EnergyChart';
@@ -27,16 +29,31 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   
+  // App State
+  const [dbError, setDbError] = useState<string | null>(null);
+  
   // Hub Connection State
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [showConnectModal, setShowConnectModal] = useState(false);
 
   // Load Data from Firebase (or LocalStorage fallback)
   useEffect(() => {
-    const unsubscribeFirebase = firebaseService.subscribeToDevices((updatedDevices) => {
-      setDevices(updatedDevices);
-      setLoading(false);
-    });
+    const unsubscribeFirebase = firebaseService.subscribeToDevices(
+      (updatedDevices) => {
+        setDevices(updatedDevices);
+        setLoading(false);
+        setDbError(null); // Clear error on success
+      },
+      (errorMsg) => {
+        console.log("App received DB error:", errorMsg);
+        if (errorMsg === 'PERMISSION_DENIED') {
+          setDbError("Acesso Negado: Configure as Regras de Segurança do Firestore para 'allow read, write: if true;'");
+        } else {
+          setDbError(`Erro de Conexão: ${errorMsg}`);
+        }
+        setLoading(false);
+      }
+    );
 
     const unsubscribeLocal = listenToLocalStorage((updatedDevices) => {
        setDevices(updatedDevices);
@@ -161,7 +178,7 @@ function App() {
                     onToggle={handleToggle} 
                 />
                 ))}
-                {devices.length === 0 && (
+                {devices.length === 0 && !dbError && (
                     <div className="col-span-full p-8 text-center bg-slate-900/50 rounded-2xl border border-dashed border-slate-700 text-slate-400">
                         No devices found. Connect a Hub (Settings or Top Bar) to start.
                     </div>
@@ -234,6 +251,14 @@ function App() {
             <span className="font-bold text-lg">OmniHome</span>
           </div>
 
+          {/* Database Alert Banner (Mobile/Desktop) */}
+          {dbError && (
+             <div className="absolute top-16 left-0 right-0 z-20 bg-red-500/90 text-white text-sm px-4 py-2 flex items-center justify-center gap-2 animate-slide-down shadow-lg">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="font-medium">{dbError}</span>
+             </div>
+          )}
+
           <div className="hidden md:flex items-center bg-slate-800/50 px-4 py-2 rounded-full border border-slate-700 w-96">
             <Search className="w-4 h-4 text-slate-500 mr-2" />
             <input 
@@ -244,6 +269,14 @@ function App() {
           </div>
 
           <div className="flex items-center gap-4">
+             {/* Connection Indicator */}
+             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700">
+               <Database className={clsx("w-3 h-3", dbError ? "text-red-500" : "text-green-500")} />
+               <span className="text-xs font-medium text-slate-400 hidden sm:inline">
+                 {dbError ? 'DB Error' : 'Database Active'}
+               </span>
+             </div>
+
             <button 
               onClick={() => !activeProvider && setShowConnectModal(true)}
               className={clsx(
@@ -268,7 +301,7 @@ function App() {
         </header>
 
         {/* Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
+        <div className="flex-1 overflow-y-auto p-6 scroll-smooth pt-10 md:pt-6">
           {renderContent()}
         </div>
         

@@ -82,15 +82,19 @@ export const firebaseService = {
 
   /**
    * Escuta alterações nos dispositivos em tempo real
+   * Agora aceita um callback de erro para avisar a UI sobre problemas de permissão
    */
-  subscribeToDevices: (callback: (devices: SmartDevice[]) => void) => {
+  subscribeToDevices: (
+      onData: (devices: SmartDevice[]) => void, 
+      onError?: (error: string) => void
+  ) => {
     if (useLocalStorage) {
         // Fallback: Read from LocalStorage or Initial
         const stored = localStorage.getItem(DATA_STORAGE_KEY);
         if (stored) {
-            callback(JSON.parse(stored));
+            onData(JSON.parse(stored));
         } else {
-            callback(INITIAL_DEVICES);
+            onData(INITIAL_DEVICES);
         }
         return () => {}; // No cleanup needed for local
     }
@@ -107,19 +111,28 @@ export const firebaseService = {
             
             if (devices.length === 0) {
                 // Se vazio, popula com inicial para o usuário ver algo na tela
+                console.log("[Firebase] Collection empty. Seeding initial data...");
                 firebaseService.saveDevices(INITIAL_DEVICES);
             } else {
-                callback(devices);
+                onData(devices);
             }
         }, (error) => {
              console.error("Firestore Error:", error);
-             // If permission denied or other error, fallback to local silently
+             
+             if (error.code === 'permission-denied') {
+                 if (onError) onError('PERMISSION_DENIED');
+             } else {
+                 if (onError) onError(error.message);
+             }
+
+             // Fallback to local so the app is not empty
              const stored = localStorage.getItem(DATA_STORAGE_KEY);
-             if (stored) callback(JSON.parse(stored));
+             if (stored) onData(JSON.parse(stored));
         });
         return unsubscribe;
-    } catch (e) {
+    } catch (e: any) {
         console.error("Error setting up listener", e);
+        if (onError) onError(e.message);
         return () => {};
     }
   },
@@ -143,8 +156,9 @@ export const firebaseService = {
         });
         await batch.commit();
         console.log("[Firebase] Batch saved devices to Firestore");
-    } catch (e) {
+    } catch (e: any) {
         console.error("Error saving to Firestore", e);
+        // Não lançamos erro aqui para não quebrar a UI, apenas logamos
     }
   },
 
