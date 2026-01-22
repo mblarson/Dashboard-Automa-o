@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, Loader2, Wifi, ShieldCheck, ExternalLink, Info, Copy, Terminal, QrCode, Smartphone, Key, Globe, Lock, Save, Globe2 } from 'lucide-react';
+import { X, Wifi, ShieldCheck, ExternalLink, Info, Terminal, Key, Globe, Lock, Globe2, Loader2 } from 'lucide-react';
 import { alexaService } from '../services/alexaService';
 import { tuyaService } from '../services/tuyaService';
 import { firebaseService } from '../services/firebase';
 import { TuyaCredentials, SmartDevice } from '../types';
-import clsx from 'clsx';
 
 interface ConnectHubModalProps {
   isOpen: boolean;
@@ -25,9 +24,9 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
     region: 'us'
   });
   const [saveCreds, setSaveCreds] = useState(true);
-  const [useProxy, setUseProxy] = useState(true); // Default to true as it's needed for browser
+  const [useProxy, setUseProxy] = useState(true);
 
-  // Load saved credentials when entering Tuya step
+  // Load saved credentials
   useEffect(() => {
     if (isOpen && step === 'config_tuya') {
       const loadCreds = async () => {
@@ -56,44 +55,21 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
     if (!tuyaService.validateCredentials(tuyaCreds)) return;
 
     setConnecting(true);
-    try {
-        // Step 1: Connect/Auth
-        const success = await tuyaService.connect(tuyaCreds, useProxy);
-        
-        if (success) {
-            // Save credentials if checked
-            if (saveCreds) {
-              await firebaseService.saveIntegrationConfig('Tuya', tuyaCreds);
-            }
+    
+    // Attempt connection
+    // Note: tuyaService.connect now handles fallback internally. 
+    // It returns true even if API fails (simulation mode), so user is never blocked.
+    await tuyaService.connect(tuyaCreds, useProxy);
 
-            setStep('sync');
-            
-            // Step 2: Sync Devices
-            const devices = await tuyaService.syncDevices(tuyaCreds, useProxy);
-            
-            setImportedDevices(devices);
-            finishConnection('Tuya', devices);
-        } else {
-            throw new Error("Connection failed");
-        }
-    } catch (e) {
-        setConnecting(false);
-        console.error(e);
-        
-        // Graceful Fallback: Allow user to proceed even if connection fails (e.g. Proxy Error)
-        const proceedAnyway = window.confirm(
-            "Não foi possível conectar à Tuya (Possível bloqueio de rede/proxy ou credenciais inválidas).\n\nDeseja salvar as credenciais e entrar mesmo assim? (Os dispositivos não serão sincronizados)"
-        );
-
-        if (proceedAnyway) {
-            if (saveCreds) {
-              // Save anyway so they don't have to retype
-              firebaseService.saveIntegrationConfig('Tuya', tuyaCreds).catch(console.error);
-            }
-            // Proceed with empty list
-            finishConnection('Tuya', []);
-        }
+    if (saveCreds) {
+      await firebaseService.saveIntegrationConfig('Tuya', tuyaCreds);
     }
+
+    setStep('sync');
+    const devices = await tuyaService.syncDevices(tuyaCreds, useProxy);
+    
+    setImportedDevices(devices);
+    finishConnection('Tuya', devices);
   };
 
   const finishConnection = (provider: 'Alexa' | 'Tuya', devices: SmartDevice[]) => {
@@ -229,7 +205,9 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                     <span className="font-bold text-orange-500 text-xl">T</span>
                  </div>
                  <h3 className="text-lg font-medium text-white">Tuya IoT Credentials</h3>
-                 <p className="text-xs text-slate-500">Real Production API Connection</p>
+                 <p className="text-xs text-slate-500">
+                    Enter any valid ID to start (Simulation Mode will activate if network fails)
+                 </p>
                </div>
 
                <div className="space-y-4">
@@ -301,7 +279,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                         </label>
                      </div>
                      <p className="text-[10px] text-slate-500 ml-6 leading-tight">
-                         Required to bypass browser security blocks when connecting to Tuya without a backend server.
+                         Required to bypass browser security blocks. If red 'Connection Failed' happens, the system will switch to Simulation Mode automatically.
                      </p>
                  </div>
                </div>
