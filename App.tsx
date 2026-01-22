@@ -15,20 +15,39 @@ import DeviceCard from './components/DeviceCard';
 import EnergyChart from './components/EnergyChart';
 import VoiceAssistant from './components/VoiceAssistant';
 import ConnectHubModal from './components/ConnectHubModal';
-import { INITIAL_DEVICES, MOCK_ENERGY_DATA } from './constants';
+import SettingsView from './components/SettingsView';
+import { MOCK_ENERGY_DATA } from './constants';
 import { SmartDevice, UpdateDevicePayload } from './types';
+import { firebaseService, listenToLocalStorage } from './services/firebase';
 import clsx from 'clsx';
 
 function App() {
-  const [devices, setDevices] = useState<SmartDevice[]>(INITIAL_DEVICES);
+  const [devices, setDevices] = useState<SmartDevice[]>([]);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   // Hub Connection State
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [showConnectModal, setShowConnectModal] = useState(false);
 
-  // Function called by both UI and Voice Assistant
+  // Load Data from Firebase (or LocalStorage fallback)
+  useEffect(() => {
+    const unsubscribeFirebase = firebaseService.subscribeToDevices((updatedDevices) => {
+      setDevices(updatedDevices);
+      setLoading(false);
+    });
+
+    const unsubscribeLocal = listenToLocalStorage((updatedDevices) => {
+       setDevices(updatedDevices);
+    });
+
+    return () => {
+      unsubscribeFirebase();
+      unsubscribeLocal();
+    };
+  }, []);
+
   const updateDevice = (payload: UpdateDevicePayload) => {
     setDevices(prevDevices => prevDevices.map(d => {
       if (d.id === payload.id) {
@@ -40,6 +59,11 @@ function App() {
       }
       return d;
     }));
+
+    firebaseService.updateDevice(payload.id, {
+        ...(payload.isOn !== undefined && { isOn: payload.isOn }),
+        ...(payload.value !== undefined && { value: payload.value })
+    });
   };
 
   const handleToggle = (id: string, currentStatus: boolean) => {
@@ -48,11 +72,106 @@ function App() {
 
   const handleHubConnect = (provider: string, importedDevices: SmartDevice[]) => {
     setActiveProvider(provider);
-    setDevices(importedDevices); // Replace mock devices with imported ones
+    firebaseService.saveDevices(importedDevices);
   };
 
   const totalActive = devices.filter(d => d.isOn).length;
   const avgTemp = devices.find(d => d.type === 'THERMOSTAT')?.value || 21;
+
+  // Render Content based on Active Tab
+  const renderContent = () => {
+    if (activeTab === 'settings') {
+      return <SettingsView />;
+    }
+
+    // Default Dashboard Content
+    return (
+      <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
+        {/* Welcome Section */}
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Good Evening, Alex</h1>
+          <p className="text-slate-400">Here's what's happening in your home today.</p>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700/50">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-blue-500/10 rounded-xl">
+                <Zap className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-slate-400 text-sm">Active Devices</p>
+                <p className="text-2xl font-bold text-slate-100">{totalActive} <span className="text-sm font-normal text-slate-500">/ {devices.length}</span></p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700/50">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-orange-500/10 rounded-xl">
+                <Thermometer className="w-6 h-6 text-orange-400" />
+              </div>
+              <div>
+                <p className="text-slate-400 text-sm">Avg Temp</p>
+                <p className="text-2xl font-bold text-slate-100">{avgTemp}°C</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700/50 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl -mr-10 -mt-10" />
+            <h3 className="text-slate-200 font-semibold mb-4 z-10 relative">Energy Usage (24h)</h3>
+            <div className="h-20 z-10 relative">
+              <EnergyChart data={MOCK_ENERGY_DATA} />
+            </div>
+          </div>
+        </div>
+
+        {/* Scenes */}
+        <div>
+          <h2 className="text-xl font-semibold mb-4 text-slate-200">Scenes</h2>
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+            {['Morning', 'Away', 'Movie Night', 'Bedtime'].map((scene) => (
+              <button 
+                key={scene}
+                className="flex-shrink-0 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 hover:text-white transition-all whitespace-nowrap"
+              >
+                {scene}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Devices Grid */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-slate-200">Favorites</h2>
+            <button className="text-sm text-cyan-400 hover:text-cyan-300">View All</button>
+          </div>
+          
+          {loading ? (
+            <div className="flex justify-center p-12 text-slate-500">Loading Devices...</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {devices.map((device) => (
+                <DeviceCard 
+                    key={device.id} 
+                    device={device} 
+                    onToggle={handleToggle} 
+                />
+                ))}
+                {devices.length === 0 && (
+                    <div className="col-span-full p-8 text-center bg-slate-900/50 rounded-2xl border border-dashed border-slate-700 text-slate-400">
+                        No devices found. Connect a Hub (Settings or Top Bar) to start.
+                    </div>
+                )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex overflow-hidden">
@@ -125,8 +244,6 @@ function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            
-            {/* Hub Status Badge - Clickable */}
             <button 
               onClick={() => !activeProvider && setShowConnectModal(true)}
               className={clsx(
@@ -152,82 +269,7 @@ function App() {
 
         {/* Scrollable Area */}
         <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
-          <div className="max-w-7xl mx-auto space-y-8">
-            
-            {/* Welcome Section */}
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Good Evening, Alex</h1>
-              <p className="text-slate-400">Here's what's happening in your home today.</p>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700/50">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-blue-500/10 rounded-xl">
-                    <Zap className="w-6 h-6 text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">Active Devices</p>
-                    <p className="text-2xl font-bold text-slate-100">{totalActive} <span className="text-sm font-normal text-slate-500">/ {devices.length}</span></p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700/50">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-orange-500/10 rounded-xl">
-                    <Thermometer className="w-6 h-6 text-orange-400" />
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-sm">Avg Temp</p>
-                    <p className="text-2xl font-bold text-slate-100">{avgTemp}°C</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700/50 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl -mr-10 -mt-10" />
-                <h3 className="text-slate-200 font-semibold mb-4 z-10 relative">Energy Usage (24h)</h3>
-                <div className="h-20 z-10 relative">
-                  <EnergyChart data={MOCK_ENERGY_DATA} />
-                </div>
-              </div>
-            </div>
-
-            {/* Scenes */}
-            <div>
-              <h2 className="text-xl font-semibold mb-4 text-slate-200">Scenes</h2>
-              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                {['Morning', 'Away', 'Movie Night', 'Bedtime'].map((scene) => (
-                  <button 
-                    key={scene}
-                    className="flex-shrink-0 px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 hover:text-white transition-all whitespace-nowrap"
-                  >
-                    {scene}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Devices Grid */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-slate-200">Favorites</h2>
-                <button className="text-sm text-cyan-400 hover:text-cyan-300">View All</button>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {devices.map((device) => (
-                  <DeviceCard 
-                    key={device.id} 
-                    device={device} 
-                    onToggle={handleToggle} 
-                  />
-                ))}
-              </div>
-            </div>
-            
-          </div>
+          {renderContent()}
         </div>
         
         {/* Voice Assistant Overlay */}
