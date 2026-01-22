@@ -17,7 +17,6 @@
  */
 
 const CLIENT_ID = 'amzn1.application-oa2-client.YOUR_CLIENT_ID'; // Replace with real ID
-const REDIRECT_URI = window.location.origin + '/auth/callback'; // Your backend callback handler
 const SCOPE = 'alexa::skills:account_linking';
 
 export const alexaService = {
@@ -26,6 +25,9 @@ export const alexaService = {
    * In a real app, you would window.location.href = this url.
    */
   getAuthUrl: () => {
+    // Moved window access inside the function to be safe during build time
+    const REDIRECT_URI = window.location.origin + '/auth/callback'; 
+    
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
       scope: SCOPE,
