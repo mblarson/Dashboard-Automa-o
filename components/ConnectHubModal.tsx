@@ -16,10 +16,10 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
   const [step, setStep] = useState<'select' | 'auth_alexa' | 'config_tuya' | 'sync' | 'success'>('select');
   const [showDevInfo, setShowDevInfo] = useState<'alexa' | 'tuya' | null>(null);
   
-  // Tuya Form State
+  // Tuya Form State - Pre-filled with Real User Credentials
   const [tuyaCreds, setTuyaCreds] = useState<TuyaCredentials>({
-    accessId: '',
-    accessSecret: '',
+    accessId: 'mgccnv55vftqft38tujm',
+    accessSecret: 'defa2658314e4957abd12e2c7d012253',
     region: 'us'
   });
 
@@ -39,14 +39,19 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
 
     setConnecting(true);
     try {
-        await tuyaService.connect(tuyaCreds);
-        setStep('sync');
-        await tuyaService.syncDevices();
-        finishConnection('Tuya');
+        // Real connection attempt
+        const success = await tuyaService.connect(tuyaCreds);
+        if (success) {
+            setStep('sync');
+            await tuyaService.syncDevices();
+            finishConnection('Tuya');
+        } else {
+            throw new Error("Connection failed");
+        }
     } catch (e) {
         setConnecting(false);
-        // Handle error visually if needed
-        alert("Invalid Credentials");
+        console.error(e);
+        alert("Falha na conexão com a API Tuya. Verifique o console para detalhes (Possível bloqueio CORS do navegador ou credenciais inválidas).");
     }
   };
 
@@ -60,7 +65,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
       setTimeout(() => {
         setStep('select');
         setShowDevInfo(null);
-        setTuyaCreds({ accessId: '', accessSecret: '', region: 'us' });
+        // Do not reset creds immediately so user doesn't have to retype if they reopen
       }, 500); 
     }, 1500);
   };
@@ -123,7 +128,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                     </div>
                     <div className="text-left">
                       <h3 className="font-medium text-slate-200">Tuya Smart</h3>
-                      <p className="text-xs text-slate-500">IoT Core API</p>
+                      <p className="text-xs text-slate-500">IoT Core API (Real Mode)</p>
                     </div>
                   </div>
                   <div className="w-8 h-8 rounded-full border border-slate-600 flex items-center justify-center group-hover:border-orange-500 group-hover:bg-orange-500/10">
@@ -155,12 +160,10 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
               <button onClick={() => setShowDevInfo(null)} className="text-xs text-slate-500 hover:text-white mb-2 flex items-center gap-1">← Back</button>
               <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-3">
                 <h3 className="font-semibold text-white flex items-center gap-2"><Terminal className="w-4 h-4 text-orange-400" /> Tuya IoT Config</h3>
-                <p className="text-sm text-slate-400">To get these keys:</p>
+                <p className="text-sm text-slate-400">Configured for Real Production API.</p>
                 <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1 ml-1">
-                  <li>Log in to <b>iot.tuya.com</b></li>
-                  <li>Go to <b>Cloud</b> {'>'} <b>Development</b></li>
-                  <li>Create or Open a Project</li>
-                  <li>Copy <b>Access ID</b> and <b>Access Secret</b></li>
+                  <li>Direct connection to <b>openapi.tuyaus.com</b></li>
+                  <li>HMAC-SHA256 Signing enabled</li>
                 </ol>
               </div>
             </div>
@@ -185,7 +188,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                     <span className="font-bold text-orange-500 text-xl">T</span>
                  </div>
                  <h3 className="text-lg font-medium text-white">Tuya IoT Credentials</h3>
-                 <p className="text-xs text-slate-500">Enter your project keys from iot.tuya.com</p>
+                 <p className="text-xs text-slate-500">Production Mode Active</p>
                </div>
 
                <div className="space-y-4">
@@ -246,7 +249,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                  disabled={connecting || !tuyaCreds.accessId || !tuyaCreds.accessSecret}
                  className="w-full mt-4 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2"
                >
-                 {connecting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Authenticate'}
+                 {connecting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Authenticate (Real Mode)'}
                </button>
              </div>
           )}
