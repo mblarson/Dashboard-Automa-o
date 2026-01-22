@@ -79,7 +79,20 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
     } catch (e) {
         setConnecting(false);
         console.error(e);
-        alert("Falha na conexão. Se estiver no navegador, certifique-se de marcar 'Use CORS Proxy' ou verifique suas credenciais.");
+        
+        // Graceful Fallback: Allow user to proceed even if connection fails (e.g. Proxy Error)
+        const proceedAnyway = window.confirm(
+            "Não foi possível conectar à Tuya (Possível bloqueio de rede/proxy ou credenciais inválidas).\n\nDeseja salvar as credenciais e entrar mesmo assim? (Os dispositivos não serão sincronizados)"
+        );
+
+        if (proceedAnyway) {
+            if (saveCreds) {
+              // Save anyway so they don't have to retype
+              firebaseService.saveIntegrationConfig('Tuya', tuyaCreds).catch(console.error);
+            }
+            // Proceed with empty list
+            finishConnection('Tuya', []);
+        }
     }
   };
 
