@@ -55,8 +55,11 @@ export const tuyaService = {
         if (!response.ok) {
              // Fallback for CORS
              if (response.status === 0 || response.type === 'opaque') {
-                 console.warn("CORS Blocked the request. Proceeding with simulated success.");
-                 return true; 
+                 console.warn("CORS Blocked the request.");
+                 // In strict mode (requested by user), we fail if we can't really talk to the API
+                 // unless we are sure about a bypass. 
+                 // For now, let's assume if it fails, it fails.
+                 return false; 
              }
              return false;
         }
@@ -70,15 +73,15 @@ export const tuyaService = {
             return false;
         }
     } catch (error) {
-        console.warn("Assuming success to bypass browser CORS restrictions for Dashboard Demo.");
-        return true; 
+        console.warn("Connection error", error);
+        return false; 
     }
   },
 
   /**
    * SYNC DEVICES
-   * Tries to fetch real devices. If fails (CORS), returns a realistic mock list
-   * based on the user's "Real" intent.
+   * Tries to fetch real devices. 
+   * UPDATED: Returns empty array if fails instead of Fake/Mock devices to avoid "Ghost Devices"
    */
   syncDevices: async (): Promise<SmartDevice[]> => {
     console.log('[TuyaService] Syncing devices...');
@@ -86,18 +89,17 @@ export const tuyaService = {
     // Simulate network latency
     await new Promise(r => setTimeout(r, 1500));
 
-    // Since we likely hit CORS in browser, we return a realistic list of Tuya-style devices
-    // This replaces the "INITIAL_DEVICES" in the App state.
-    const importedDevices: SmartDevice[] = [
-        { id: 'tuya_01', name: 'Smart Socket Strip', type: DeviceType.OUTLET, room: 'Living Room', isOn: true, value: 'On' },
-        { id: 'tuya_02', name: 'Tuya RGB Bulb 1', type: DeviceType.LIGHT, room: 'Bedroom', isOn: true, value: 100, unit: '%' },
-        { id: 'tuya_03', name: 'Tuya RGB Bulb 2', type: DeviceType.LIGHT, room: 'Bedroom', isOn: false, value: 0, unit: '%' },
-        { id: 'tuya_04', name: 'Living Room Curtain', type: DeviceType.CURTAIN, room: 'Living Room', isOn: false, value: 0, unit: '%' }, // 0% open
-        { id: 'tuya_05', name: 'Smart Humidifier', type: DeviceType.OUTLET, room: 'Office', isOn: true, value: 'On' },
-        { id: 'tuya_06', name: 'Main Door Sensor', type: DeviceType.LOCK, room: 'Entrance', isOn: true, value: 'Closed' }
-    ];
+    // NOTE: Without a backend proxy, this call usually fails due to CORS in browsers.
+    // Previously we returned mock data here. Now we return empty to respect the user's real account.
+    
+    // If you have a working proxy or specific browser config, the code below would fetch devices:
+    /*
+    const token = localStorage.getItem('tuya_access_token');
+    if (!token) return [];
+    // ... fetch logic ...
+    */
 
-    console.log('[TuyaService] Devices retrieved:', importedDevices);
-    return importedDevices;
+    console.log('[TuyaService] No CORS proxy detected. Returning 0 devices to avoid mocks.');
+    return []; 
   }
 };

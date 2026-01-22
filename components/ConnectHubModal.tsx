@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X, Check, Loader2, Wifi, ShieldCheck, ExternalLink, Info, Copy, Terminal, QrCode, Smartphone, Key, Globe, Lock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Check, Loader2, Wifi, ShieldCheck, ExternalLink, Info, Copy, Terminal, QrCode, Smartphone, Key, Globe, Lock, Save } from 'lucide-react';
 import { alexaService } from '../services/alexaService';
 import { tuyaService } from '../services/tuyaService';
+import { firebaseService } from '../services/firebase';
 import { TuyaCredentials, SmartDevice } from '../types';
 import clsx from 'clsx';
 
@@ -17,12 +18,26 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
   const [showDevInfo, setShowDevInfo] = useState<'alexa' | 'tuya' | null>(null);
   const [importedDevices, setImportedDevices] = useState<SmartDevice[]>([]);
   
-  // Tuya Form State - Pre-filled with Real User Credentials
+  // Tuya Form State
   const [tuyaCreds, setTuyaCreds] = useState<TuyaCredentials>({
-    accessId: 'mgccnv55vftqft38tujm',
-    accessSecret: 'defa2658314e4957abd12e2c7d012253',
+    accessId: '',
+    accessSecret: '',
     region: 'us'
   });
+  const [saveCreds, setSaveCreds] = useState(true);
+
+  // Load saved credentials when entering Tuya step
+  useEffect(() => {
+    if (isOpen && step === 'config_tuya') {
+      const loadCreds = async () => {
+        const saved = await firebaseService.getIntegrationConfig('Tuya');
+        if (saved) {
+          setTuyaCreds(prev => ({ ...prev, ...saved }));
+        }
+      };
+      loadCreds();
+    }
+  }, [isOpen, step]);
 
   if (!isOpen) return null;
 
@@ -43,8 +58,21 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
     try {
         const success = await tuyaService.connect(tuyaCreds);
         if (success) {
+            // Save credentials if checked
+            if (saveCreds) {
+              await firebaseService.saveIntegrationConfig('Tuya', tuyaCreds);
+            }
+
             setStep('sync');
             const devices = await tuyaService.syncDevices();
+            
+            if (devices.length === 0) {
+              alert("Nenhum dispositivo encontrado ou erro de CORS. Verifique o console.");
+              setConnecting(false);
+              setStep('config_tuya');
+              return;
+            }
+
             setImportedDevices(devices);
             finishConnection('Tuya', devices);
         } else {
@@ -130,7 +158,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                     </div>
                     <div className="text-left">
                       <h3 className="font-medium text-slate-200">Tuya Smart</h3>
-                      <p className="text-xs text-slate-500">IoT Core API (Real Mode)</p>
+                      <p className="text-xs text-slate-500">IoT Core API</p>
                     </div>
                   </div>
                   <div className="w-8 h-8 rounded-full border border-slate-600 flex items-center justify-center group-hover:border-orange-500 group-hover:bg-orange-500/10">
@@ -190,7 +218,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                     <span className="font-bold text-orange-500 text-xl">T</span>
                  </div>
                  <h3 className="text-lg font-medium text-white">Tuya IoT Credentials</h3>
-                 <p className="text-xs text-slate-500">Production Mode Active</p>
+                 <p className="text-xs text-slate-500">Real Production API Connection</p>
                </div>
 
                <div className="space-y-4">
@@ -246,12 +274,25 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                  </div>
                </div>
 
+               <div className="flex items-center gap-2 pt-2">
+                 <input 
+                    type="checkbox" 
+                    id="saveCreds" 
+                    checked={saveCreds} 
+                    onChange={(e) => setSaveCreds(e.target.checked)}
+                    className="w-4 h-4 rounded bg-slate-900 border-slate-700 text-orange-500 focus:ring-orange-500/20"
+                 />
+                 <label htmlFor="saveCreds" className="text-xs text-slate-400 cursor-pointer select-none">
+                   Save credentials to Firebase (for future auto-connect)
+                 </label>
+               </div>
+
                <button 
                  onClick={handleConnectTuya}
                  disabled={connecting || !tuyaCreds.accessId || !tuyaCreds.accessSecret}
                  className="w-full mt-4 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2"
                >
-                 {connecting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Authenticate (Real Mode)'}
+                 {connecting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Authenticate & Sync'}
                </button>
              </div>
           )}

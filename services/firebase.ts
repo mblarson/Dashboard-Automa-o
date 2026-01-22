@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, writeBatch, getDoc } from 'firebase/firestore';
 import { SmartDevice } from '../types';
 import { INITIAL_DEVICES } from '../constants';
 
@@ -81,22 +81,53 @@ export const firebaseService = {
   },
 
   /**
+   * Salva credenciais de integração (ex: Tuya) no Firestore
+   */
+  saveIntegrationConfig: async (provider: string, credentials: any) => {
+    if (useLocalStorage) return;
+    try {
+      const docRef = doc(db, 'settings', `integration_${provider.toLowerCase()}`);
+      await setDoc(docRef, credentials);
+      console.log(`[Firebase] Saved ${provider} credentials`);
+    } catch (e) {
+      console.error("Error saving integration config", e);
+    }
+  },
+
+  /**
+   * Recupera credenciais de integração salvas
+   */
+  getIntegrationConfig: async (provider: string) => {
+    if (useLocalStorage) return null;
+    try {
+      const docRef = doc(db, 'settings', `integration_${provider.toLowerCase()}`);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data();
+      }
+      return null;
+    } catch (e) {
+      console.error("Error fetching integration config", e);
+      return null;
+    }
+  },
+
+  /**
    * Escuta alterações nos dispositivos em tempo real
-   * Agora aceita um callback de erro para avisar a UI sobre problemas de permissão
    */
   subscribeToDevices: (
       onData: (devices: SmartDevice[]) => void, 
       onError?: (error: string) => void
   ) => {
     if (useLocalStorage) {
-        // Fallback: Read from LocalStorage or Initial
         const stored = localStorage.getItem(DATA_STORAGE_KEY);
+        // Se não tiver nada no local storage, retorna array vazio (não cria INITIAL_DEVICES)
         if (stored) {
             onData(JSON.parse(stored));
         } else {
-            onData(INITIAL_DEVICES);
+            onData([]);
         }
-        return () => {}; // No cleanup needed for local
+        return () => {}; 
     }
 
     // Real Firestore Listener
@@ -109,13 +140,10 @@ export const firebaseService = {
             });
             devices.sort((a, b) => a.name.localeCompare(b.name));
             
-            if (devices.length === 0) {
-                // Se vazio, popula com inicial para o usuário ver algo na tela
-                console.log("[Firebase] Collection empty. Seeding initial data...");
-                firebaseService.saveDevices(INITIAL_DEVICES);
-            } else {
-                onData(devices);
-            }
+            // REMOVIDO: A lógica que inseria INITIAL_DEVICES se a lista estivesse vazia.
+            // Agora respeitamos o estado real do banco.
+            onData(devices);
+            
         }, (error) => {
              console.error("Firestore Error:", error);
              
@@ -125,7 +153,6 @@ export const firebaseService = {
                  if (onError) onError(error.message);
              }
 
-             // Fallback to local so the app is not empty
              const stored = localStorage.getItem(DATA_STORAGE_KEY);
              if (stored) onData(JSON.parse(stored));
         });
@@ -141,7 +168,6 @@ export const firebaseService = {
    * Salva uma lista inteira de dispositivos
    */
   saveDevices: async (devices: SmartDevice[]) => {
-    // Always save to local storage as backup/cache
     localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify(devices));
     window.dispatchEvent(new CustomEvent('local-storage-update', { detail: devices }));
 
@@ -158,7 +184,6 @@ export const firebaseService = {
         console.log("[Firebase] Batch saved devices to Firestore");
     } catch (e: any) {
         console.error("Error saving to Firestore", e);
-        // Não lançamos erro aqui para não quebrar a UI, apenas logamos
     }
   },
 
@@ -166,9 +191,8 @@ export const firebaseService = {
    * Atualiza o estado de um único dispositivo
    */
   updateDevice: async (deviceId: string, updates: Partial<SmartDevice>) => {
-    // Optimistic local update
     const stored = localStorage.getItem(DATA_STORAGE_KEY);
-    let devices = stored ? JSON.parse(stored) : INITIAL_DEVICES;
+    let devices = stored ? JSON.parse(stored) : [];
     devices = devices.map((d: SmartDevice) => d.id === deviceId ? { ...d, ...updates } : d);
     localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify(devices));
     window.dispatchEvent(new CustomEvent('local-storage-update', { detail: devices }));
@@ -184,7 +208,6 @@ export const firebaseService = {
   }
 };
 
-// Helper for LocalStorage listener in App
 export const listenToLocalStorage = (callback: (devices: SmartDevice[]) => void) => {
     const handler = (e: CustomEvent) => callback(e.detail);
     window.addEventListener('local-storage-update', handler as any);
