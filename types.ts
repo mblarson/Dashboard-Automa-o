@@ -32,3 +32,9 @@ export type UpdateDevicePayload = {
   isOn?: boolean;
   value?: number | string;
 };
+
+export interface TuyaCredentials {
+  accessId: string;
+  accessSecret: string;
+  region: string;
+}
