@@ -46,6 +46,11 @@ function App() {
     updateDevice({ id, isOn: !currentStatus });
   };
 
+  const handleHubConnect = (provider: string, importedDevices: SmartDevice[]) => {
+    setActiveProvider(provider);
+    setDevices(importedDevices); // Replace mock devices with imported ones
+  };
+
   const totalActive = devices.filter(d => d.isOn).length;
   const avgTemp = devices.find(d => d.type === 'THERMOSTAT')?.value || 21;
 
@@ -232,7 +237,7 @@ function App() {
         <ConnectHubModal 
           isOpen={showConnectModal} 
           onClose={() => setShowConnectModal(false)}
-          onConnect={(provider) => setActiveProvider(provider)}
+          onConnect={handleHubConnect}
         />
 
       </main>

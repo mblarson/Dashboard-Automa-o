@@ -2,19 +2,20 @@ import React, { useState } from 'react';
 import { X, Check, Loader2, Wifi, ShieldCheck, ExternalLink, Info, Copy, Terminal, QrCode, Smartphone, Key, Globe, Lock } from 'lucide-react';
 import { alexaService } from '../services/alexaService';
 import { tuyaService } from '../services/tuyaService';
-import { TuyaCredentials } from '../types';
+import { TuyaCredentials, SmartDevice } from '../types';
 import clsx from 'clsx';
 
 interface ConnectHubModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConnect: (provider: 'Alexa' | 'Tuya') => void;
+  onConnect: (provider: 'Alexa' | 'Tuya', devices: SmartDevice[]) => void;
 }
 
 const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onConnect }) => {
   const [connecting, setConnecting] = useState(false);
   const [step, setStep] = useState<'select' | 'auth_alexa' | 'config_tuya' | 'sync' | 'success'>('select');
   const [showDevInfo, setShowDevInfo] = useState<'alexa' | 'tuya' | null>(null);
+  const [importedDevices, setImportedDevices] = useState<SmartDevice[]>([]);
   
   // Tuya Form State - Pre-filled with Real User Credentials
   const [tuyaCreds, setTuyaCreds] = useState<TuyaCredentials>({
@@ -30,8 +31,9 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
     setConnecting(true);
     await alexaService.pollForConnection();
     setStep('sync');
-    await alexaService.syncDevices();
-    finishConnection('Alexa');
+    const devices = await alexaService.syncDevices();
+    setImportedDevices(devices);
+    finishConnection('Alexa', devices);
   };
 
   const handleConnectTuya = async () => {
@@ -39,33 +41,33 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
 
     setConnecting(true);
     try {
-        // Real connection attempt
         const success = await tuyaService.connect(tuyaCreds);
         if (success) {
             setStep('sync');
-            await tuyaService.syncDevices();
-            finishConnection('Tuya');
+            const devices = await tuyaService.syncDevices();
+            setImportedDevices(devices);
+            finishConnection('Tuya', devices);
         } else {
             throw new Error("Connection failed");
         }
     } catch (e) {
         setConnecting(false);
         console.error(e);
-        alert("Falha na conexão com a API Tuya. Verifique o console para detalhes (Possível bloqueio CORS do navegador ou credenciais inválidas).");
+        alert("Falha na conexão com a API Tuya. Verifique credenciais ou console.");
     }
   };
 
-  const finishConnection = (provider: 'Alexa' | 'Tuya') => {
+  const finishConnection = (provider: 'Alexa' | 'Tuya', devices: SmartDevice[]) => {
     setConnecting(false);
     setStep('success');
     
     setTimeout(() => {
-      onConnect(provider);
+      onConnect(provider, devices);
       onClose();
       setTimeout(() => {
         setStep('select');
         setShowDevInfo(null);
-        // Do not reset creds immediately so user doesn't have to retype if they reopen
+        setImportedDevices([]);
       }, 500); 
     }, 1500);
   };
@@ -269,7 +271,10 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
               <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center">
                 <ShieldCheck className="w-10 h-10 text-green-400" />
               </div>
-               <div><h3 className="text-lg font-medium text-white">Integration Active</h3></div>
+               <div className="space-y-1">
+                 <h3 className="text-lg font-medium text-white">Integration Active</h3>
+                 <p className="text-sm text-slate-400">{importedDevices.length} Devices Synced</p>
+               </div>
             </div>
           )}
 

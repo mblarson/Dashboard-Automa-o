@@ -3,7 +3,9 @@ export enum DeviceType {
   THERMOSTAT = 'THERMOSTAT',
   LOCK = 'LOCK',
   CAMERA = 'CAMERA',
-  SPEAKER = 'SPEAKER'
+  SPEAKER = 'SPEAKER',
+  OUTLET = 'OUTLET',
+  CURTAIN = 'CURTAIN'
 }
 
 export interface SmartDevice {

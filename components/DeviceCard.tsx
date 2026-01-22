@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lightbulb, Thermometer, Lock, Unlock, Video, Power, Speaker } from 'lucide-react';
+import { Lightbulb, Thermometer, Lock, Unlock, Video, Power, Speaker, Plug, Blinds } from 'lucide-react';
 import { SmartDevice, DeviceType } from '../types';
 import clsx from 'clsx';
 
@@ -21,6 +21,10 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onToggle }) => {
         return <Video className={clsx("w-6 h-6", device.isOn ? "text-blue-400" : "text-slate-400")} />;
       case DeviceType.SPEAKER:
         return <Speaker className={clsx("w-6 h-6", device.isOn ? "text-purple-400" : "text-slate-400")} />;
+      case DeviceType.OUTLET:
+        return <Plug className={clsx("w-6 h-6", device.isOn ? "text-green-400" : "text-slate-400")} />;
+      case DeviceType.CURTAIN:
+        return <Blinds className={clsx("w-6 h-6", device.isOn ? "text-cyan-400" : "text-slate-400")} />;
       default:
         return <Power className="w-6 h-6 text-slate-400" />;
     }
@@ -30,6 +34,8 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onToggle }) => {
     if (device.type === DeviceType.THERMOSTAT) return `${device.value}${device.unit}`;
     if (device.type === DeviceType.LIGHT) return device.isOn ? `${device.value}%` : 'Off';
     if (device.type === DeviceType.LOCK) return device.isOn ? 'Locked' : 'Unlocked';
+    if (device.type === DeviceType.OUTLET) return device.isOn ? 'On' : 'Off';
+    if (device.type === DeviceType.CURTAIN) return `${device.value}% Open`;
     return device.isOn ? 'On' : 'Off';
   };
 
