@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, Loader2, Wifi, ShieldCheck, ExternalLink, Info, Copy, Terminal, QrCode, Smartphone, Key, Globe, Lock, Save } from 'lucide-react';
+import { X, Check, Loader2, Wifi, ShieldCheck, ExternalLink, Info, Copy, Terminal, QrCode, Smartphone, Key, Globe, Lock, Save, Globe2 } from 'lucide-react';
 import { alexaService } from '../services/alexaService';
 import { tuyaService } from '../services/tuyaService';
 import { firebaseService } from '../services/firebase';
@@ -25,6 +25,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
     region: 'us'
   });
   const [saveCreds, setSaveCreds] = useState(true);
+  const [useProxy, setUseProxy] = useState(true); // Default to true as it's needed for browser
 
   // Load saved credentials when entering Tuya step
   useEffect(() => {
@@ -56,7 +57,9 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
 
     setConnecting(true);
     try {
-        const success = await tuyaService.connect(tuyaCreds);
+        // Step 1: Connect/Auth
+        const success = await tuyaService.connect(tuyaCreds, useProxy);
+        
         if (success) {
             // Save credentials if checked
             if (saveCreds) {
@@ -64,15 +67,10 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
             }
 
             setStep('sync');
-            const devices = await tuyaService.syncDevices();
             
-            if (devices.length === 0) {
-              alert("Nenhum dispositivo encontrado ou erro de CORS. Verifique o console.");
-              setConnecting(false);
-              setStep('config_tuya');
-              return;
-            }
-
+            // Step 2: Sync Devices
+            const devices = await tuyaService.syncDevices(tuyaCreds, useProxy);
+            
             setImportedDevices(devices);
             finishConnection('Tuya', devices);
         } else {
@@ -81,7 +79,7 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
     } catch (e) {
         setConnecting(false);
         console.error(e);
-        alert("Falha na conexão com a API Tuya. Verifique credenciais ou console.");
+        alert("Falha na conexão. Se estiver no navegador, certifique-se de marcar 'Use CORS Proxy' ou verifique suas credenciais.");
     }
   };
 
@@ -254,23 +252,44 @@ const ConnectHubModal: React.FC<ConnectHubModalProps> = ({ isOpen, onClose, onCo
                    </div>
                  </div>
 
-                 <div className="space-y-1">
-                   <label className="text-xs text-slate-400 font-medium ml-1">Data Center Region</label>
-                   <div className="relative">
-                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                       <Globe className="h-4 w-4 text-slate-500" />
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                    <label className="text-xs text-slate-400 font-medium ml-1">Region</label>
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Globe className="h-4 w-4 text-slate-500" />
+                        </div>
+                        <select 
+                            value={tuyaCreds.region}
+                            onChange={(e) => setTuyaCreds({...tuyaCreds, region: e.target.value})}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2.5 pl-10 pr-2 text-sm text-white focus:outline-none focus:border-orange-500 transition-colors appearance-none"
+                        >
+                        <option value="us">US</option>
+                        <option value="eu">EU</option>
+                        <option value="cn">CN</option>
+                        <option value="in">IN</option>
+                        </select>
+                    </div>
+                    </div>
+                 </div>
+
+                 {/* PROXY OPTION */}
+                 <div className="bg-slate-800/30 p-3 rounded-lg border border-slate-700/50 space-y-2">
+                     <div className="flex items-center gap-2">
+                        <input 
+                            type="checkbox" 
+                            id="useProxy" 
+                            checked={useProxy} 
+                            onChange={(e) => setUseProxy(e.target.checked)}
+                            className="w-4 h-4 rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-cyan-500/20"
+                        />
+                        <label htmlFor="useProxy" className="text-xs font-medium text-slate-300 cursor-pointer flex items-center gap-1">
+                            <Globe2 className="w-3 h-3 text-cyan-400" /> Use CORS Proxy
+                        </label>
                      </div>
-                     <select 
-                        value={tuyaCreds.region}
-                        onChange={(e) => setTuyaCreds({...tuyaCreds, region: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2.5 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-orange-500 transition-colors appearance-none"
-                     >
-                       <option value="us">Western America (US)</option>
-                       <option value="eu">Central Europe (EU)</option>
-                       <option value="cn">China (CN)</option>
-                       <option value="in">India (IN)</option>
-                     </select>
-                   </div>
+                     <p className="text-[10px] text-slate-500 ml-6 leading-tight">
+                         Required to bypass browser security blocks when connecting to Tuya without a backend server.
+                     </p>
                  </div>
                </div>
 

@@ -32,12 +32,7 @@ export const alexaService = {
     
     await new Promise(r => setTimeout(r, 1500));
 
-    // Mock devices coming from Alexa Skill
-    return [
-        { id: 'alexa_1', name: 'Echo Dot Kitchen', type: DeviceType.SPEAKER, room: 'Kitchen', isOn: true, value: 40, unit: '%' },
-        { id: 'alexa_2', name: 'Smart Thermostat', type: DeviceType.THERMOSTAT, room: 'Hallway', isOn: true, value: 23, unit: '°C' },
-        { id: 'alexa_3', name: 'Driveway Cam', type: DeviceType.CAMERA, room: 'Garage', isOn: true, value: 'Live' },
-        { id: 'alexa_4', name: 'Porch Light', type: DeviceType.LIGHT, room: 'Entrance', isOn: false, value: 0, unit: '%' }
-    ];
+    // Mock devices removed per user request (no ghost devices)
+    return [];
   }
 };
